@@ -7,7 +7,7 @@
  * - Graceful shutdown on SIGTERM/SIGINT
  */
 
-import { RabbitMqBaseClass } from "../Correct/Rabbit.singleton.correct";
+import { RabbitMqBaseClass } from "../src/connection.js";
 
 async function main() {
   const rabbit = new RabbitMqBaseClass("amqp://guest:guest@localhost:5672", {
