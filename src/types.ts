@@ -1,0 +1,47 @@
+import type amqp from "amqplib";
+
+export type ExchangeTopics = "fanout" | "direct" | "topic" | "headers";
+
+export interface RabbitConnectionOptions {
+  heartbeat?: number;
+  reconnectInterval?: number;
+  maxReconnectAttempts?: number;
+  frameMax?: number;
+  channelMax?: number;
+}
+
+export interface QueueArguments {
+  "x-dead-letter-exchange"?: string;
+  "x-dead-letter-routing-key"?: string;
+  "x-message-ttl"?: number;
+  "x-max-length"?: number;
+  "x-max-priority"?: number;
+  "x-queue-mode"?: "default" | "lazy";
+  "x-expires"?: number;
+  "x-overflow"?: "drop-head" | "reject-publish";
+  [key: string]: any;
+}
+
+export interface PublishOptions {
+  persistent?: boolean;
+  priority?: number;
+  expiration?: string;
+  correlationId?: string;
+  replyTo?: string;
+  messageId?: string;
+  timestamp?: number;
+  contentType?: string;
+  headers?: Record<string, any>;
+}
+
+export interface ConsumeOptions {
+  workerCount?: number;
+  prefetchCount?: number;
+  requeueOnFailure?: boolean;
+  retryLimit?: number;
+}
+
+export type MessageHandler = (
+  data: Record<string, any>,
+  msg: amqp.ConsumeMessage
+) => Promise<void>;
