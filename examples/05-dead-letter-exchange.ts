@@ -7,10 +7,7 @@
  * - Messages nack'd or expired → automatically land in DLQ
  */
 
-import {
-  RabbitMqBaseClass,
-  RabbitMqQueueExchange,
-} from "../Correct/Rabbit.singleton.correct";
+import { RabbitMqBaseClass, RabbitMqQueueExchange } from "../src";
 
 class PaymentExchange extends RabbitMqQueueExchange {
   constructor() {

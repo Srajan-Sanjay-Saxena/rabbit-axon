@@ -8,11 +8,7 @@
  * - unbindQueue() — remove a binding between queue and exchange
  */
 
-import {
-  RabbitMqBaseClass,
-  RabbitMqQueueExchange,
-} from "../Correct/Rabbit.singleton.correct";
-
+import { RabbitMqBaseClass, RabbitMqQueueExchange } from "../src";
 class TempExchange extends RabbitMqQueueExchange {
   constructor() {
     super("temp.exchange", "topic", { durable: false, autoDelete: false });

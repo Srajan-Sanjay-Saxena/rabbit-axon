@@ -7,10 +7,8 @@
  * - Queue arguments: TTL, max-length, priority
  */
 
-import {
-  RabbitMqBaseClass,
-  RabbitMqQueueExchange,
-} from "../Correct/Rabbit.singleton.correct";
+import { RabbitMqBaseClass, RabbitMqQueueExchange } from "../src";
+
 
 class OrderExchange extends RabbitMqQueueExchange {
   constructor() {
