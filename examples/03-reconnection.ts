@@ -3,6 +3,7 @@
  *
  * Demonstrates:
  * - onReconnect() to re-establish exchanges, queues, and consumers after connection drops
+ * - Static exchangeName accessed directly from the class
  * - Complete lifecycle: setup → consume → reconnect → re-setup → resume consuming
  *
  * Test this by:
@@ -14,65 +15,28 @@
 import {
   RabbitMqBaseClass,
   RabbitMqQueueExchange,
-  RabbitProducerExchanger,
+  RabbitProducer,
+  RabbitConsumer,
 } from "../src/index.js";
 
-// --- Exchange Setup ---
-
 class OrderExchange extends RabbitMqQueueExchange {
-  constructor() {
-    super("orders.exchange", "topic", { durable: true });
-  }
+  static exchangeName = "orders.exchange";
+  static exchangeType = "topic" as const;
+  static exchangeOptions = { durable: true, autoDelete: false };
 
   async setup(rabbit: RabbitMqBaseClass) {
     await this.startChannelization(rabbit);
     await this.createExchange();
-
-    // DLQ for failed orders
     await this.createQueue("orders.dlq", "order.failed.#", { durable: true });
-
-    // Main processing queue with DLX
     await this.createDeadLetterQueue(
       "orders.process",
-      "orders.exchange",
+      OrderExchange.exchangeName,
       "order.failed",
       60000
     );
-
     console.log("[Setup] Exchange and queues asserted");
   }
 }
-
-// --- Consumer ---
-
-async function startConsumer(rabbit: RabbitMqBaseClass) {
-  const consumer = new RabbitProducerExchanger("orders.exchange", {});
-
-  await consumer.consumeMessage(
-    rabbit,
-    "orders.process",
-    async (data, msg) => {
-      const attempt = (msg.properties.headers?.["x-retry-count"] ?? 0) + 1;
-      console.log(
-        `[Consumer] Processing order ${data.orderId} (attempt ${attempt})`
-      );
-
-      // Simulate work
-      await new Promise((r) => setTimeout(r, 300));
-      console.log(`[Consumer] Order ${data.orderId} done ✓`);
-    },
-    {
-      workerCount: 2,
-      prefetchCount: 1,
-      requeueOnFailure: true,
-      retryLimit: 3,
-    }
-  );
-
-  console.log("[Consumer] 2 workers consuming from orders.process");
-}
-
-// --- Main ---
 
 async function main() {
   const rabbit = new RabbitMqBaseClass("amqp://localhost", {
@@ -84,42 +48,40 @@ async function main() {
   await rabbit.ConnectToService();
   console.log("[Main] Connected to RabbitMQ");
 
-  // Initial setup
   const exchange = new OrderExchange();
   await exchange.setup(rabbit);
-  await startConsumer(rabbit);
 
-  // Register reconnection handler — re-assert everything after connection drops
+  // Use static exchangeName directly — no need to pass strings around
+  const consumer = new RabbitConsumer(OrderExchange.exchangeName);
+  await consumer.consume(
+    rabbit,
+    "orders.process",
+    async (data, msg) => {
+      const attempt = (msg.properties.headers?.["x-retry-count"] ?? 0) + 1;
+      console.log(`[Consumer] Processing order ${data.orderId} (attempt ${attempt})`);
+      await new Promise((r) => setTimeout(r, 300));
+      console.log(`[Consumer] Order ${data.orderId} done ✓`);
+    },
+    { workerCount: 2, prefetchCount: 1, requeueOnFailure: true, retryLimit: 3 }
+  );
+
   rabbit.onReconnect(async () => {
-    console.log("[Reconnect] Connection restored. Re-initializing...");
-
-    // Re-assert exchanges and queues (idempotent — safe to call again)
+    console.log("[Reconnect] Connection restored. Re-asserting exchanges...");
     await exchange.setup(rabbit);
-    console.log("[Reconnect] Exchanges and queues re-asserted");
-
-    // Note: consumers are automatically re-established by consumeMessage()
-    // because it internally registers its own onReconnect callback.
-    // You only need to re-assert exchanges/queues here.
-
     console.log("[Reconnect] All resources re-initialized ✓");
   });
 
-  // Publish a test message every 5 seconds to verify things work
+  // Producer also uses static exchangeName
+  const producer = new RabbitProducer(OrderExchange.exchangeName, "order.created");
   setInterval(async () => {
     try {
-      const producer = new RabbitProducerExchanger(
-        "orders.exchange",
-        { orderId: `ORD-${Date.now()}`, item: "Widget", qty: 1 },
-        "order.created"
-      );
-      await producer.produceMessage(rabbit, { persistent: true });
+      await producer.publish(rabbit, { orderId: `ORD-${Date.now()}`, item: "Widget" });
       console.log("[Publisher] Test message sent");
     } catch (err) {
-      console.warn("[Publisher] Failed to publish (connection down?):", (err as Error).message);
+      console.warn("[Publisher] Failed:", (err as Error).message);
     }
   }, 5000);
 
-  // Graceful shutdown
   const shutdown = async () => {
     console.log("\n[Shutdown] Closing connection...");
     await rabbit.gracefulShutdown();

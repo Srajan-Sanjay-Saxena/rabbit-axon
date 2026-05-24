@@ -2,41 +2,46 @@
  * Example: Produce with Confirm (Guaranteed Delivery)
  *
  * Demonstrates:
- * - produceWithConfirm() — broker acknowledges receipt
+ * - publishWithConfirm() — broker acknowledges receipt
  * - Returns true if confirmed, false if nacked
- * - Use for critical messages (payments, orders)
+ * - Static exchangeName — single source of truth
  */
 
 import {
   RabbitMqBaseClass,
-  RabbitProducerExchanger,
-} from "../Correct/Rabbit.singleton.correct";
+  RabbitMqQueueExchange,
+  RabbitProducer,
+} from "../src/index.js";
+
+class PaymentExchange extends RabbitMqQueueExchange {
+  static exchangeName = "payments.exchange";
+  static exchangeType = "direct" as const;
+}
 
 async function main() {
   const rabbit = new RabbitMqBaseClass("amqp://localhost");
 
-  const producer = new RabbitProducerExchanger(
-    "payments.exchange",
+  const paymentProducer = new RabbitProducer(PaymentExchange.exchangeName, "payment.process");
+
+  const confirmed = await paymentProducer.publishWithConfirm(
+    rabbit,
     {
       paymentId: "PAY-999",
       amount: 149.99,
       currency: "USD",
       userId: "user-123",
     },
-    "payment.process"
+    {
+      persistent: true,
+      correlationId: "txn-abc-456",
+      headers: { "x-idempotency-key": "idem-PAY-999" },
+    }
   );
-
-  const confirmed = await producer.produceWithConfirm(rabbit, {
-    persistent: true,
-    correlationId: "txn-abc-456",
-    headers: { "x-idempotency-key": "idem-PAY-999" },
-  });
 
   if (confirmed) {
     console.log("✓ Broker confirmed — message is safely queued");
   } else {
     console.error("✗ Broker rejected — implement fallback!");
-    // Fallback: write to DB outbox, retry later, alert ops, etc.
   }
 
   await rabbit.gracefulShutdown();

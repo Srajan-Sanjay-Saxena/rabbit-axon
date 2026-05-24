@@ -4,7 +4,7 @@
  * Demonstrates:
  * - workerCount: 4 parallel consumers on separate channels
  * - prefetchCount: messages per worker at a time
- * - Each worker processes independently — no contention
+ * - Static exchangeName — no string duplication
  *
  * Architecture:
  *   Queue: emails.send
@@ -16,16 +16,22 @@
 
 import {
   RabbitMqBaseClass,
-  RabbitProducerExchanger,
-} from "../Correct/Rabbit.singleton.correct";
+  RabbitMqQueueExchange,
+  RabbitConsumer,
+} from "../src/index.js";
+
+class NotificationExchange extends RabbitMqQueueExchange {
+  static exchangeName = "notifications.exchange";
+  static exchangeType = "direct" as const;
+}
 
 async function main() {
   const rabbit = new RabbitMqBaseClass("amqp://localhost");
   await rabbit.ConnectToService();
 
-  const consumer = new RabbitProducerExchanger("notifications.exchange", {});
+  const consumer = new RabbitConsumer(NotificationExchange.exchangeName);
 
-  await consumer.consumeMessage(
+  await consumer.consume(
     rabbit,
     "emails.send",
     async (data, msg) => {
@@ -37,12 +43,12 @@ async function main() {
       console.log(`[${workerId}] Email sent ✓`);
     },
     {
-      workerCount: 4,      // 4 parallel workers
-      prefetchCount: 2,    // each worker grabs 2 messages at a time
+      workerCount: 4,
+      prefetchCount: 2,
     }
   );
 
-  console.log("4 workers consuming from emails.send");
+  console.log(`4 workers consuming from "${NotificationExchange.exchangeName}"`);
 
   process.on("SIGINT", async () => {
     await rabbit.gracefulShutdown();
@@ -51,7 +57,6 @@ async function main() {
 }
 
 async function sendEmail(to: string, subject: string, body: string) {
-  // simulate email sending latency
   await new Promise((r) => setTimeout(r, Math.random() * 2000));
 }
 

@@ -1,8 +1,10 @@
 export { RabbitMqBaseClass } from "./connection.js";
 export { RabbitMqQueueExchange } from "./exchange.js";
-export { RabbitProducerExchanger } from "./producer.js";
+export { RabbitProducer } from "./producer.js";
+export { RabbitConsumer } from "./consumer.js";
 export type {
   ExchangeTopics,
+  ExchangeOptions,
   RabbitConnectionOptions,
   QueueArguments,
   PublishOptions,

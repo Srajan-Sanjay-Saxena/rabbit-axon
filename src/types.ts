@@ -2,6 +2,14 @@ import type amqp from "amqplib";
 
 export type ExchangeTopics = "fanout" | "direct" | "topic" | "headers";
 
+export interface ExchangeOptions {
+  durable?: boolean;
+  autoDelete?: boolean;
+  internal?: boolean;
+  alternateExchange?: string;
+  arguments?: Record<string, any>;
+}
+
 export interface RabbitConnectionOptions {
   heartbeat?: number;
   reconnectInterval?: number;

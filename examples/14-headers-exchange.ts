@@ -4,51 +4,51 @@
  * Demonstrates:
  * - Exchange type "headers" — routing based on message headers
  * - Binding with x-match: "all" (all headers must match) or "any"
- * - Useful when routing logic is more complex than a string pattern
+ * - Static exchangeName for producer reference
  */
 
 import {
   RabbitMqBaseClass,
   RabbitMqQueueExchange,
-  RabbitProducerExchanger,
-} from "../Correct/Rabbit.singleton.correct";
+  RabbitProducer,
+} from "../src/index.js";
 
 class EventExchange extends RabbitMqQueueExchange {
-  constructor() {
-    super("events.headers", "headers", { durable: true });
-  }
+  static exchangeName = "events.headers";
+  static exchangeType = "headers" as const;
+  static exchangeOptions = { durable: true, autoDelete: false };
 
   async setup(rabbit: RabbitMqBaseClass) {
     await this.startChannelization(rabbit);
     await this.createExchange();
 
-    // Queue that only receives messages where BOTH headers match
+    // Only receives messages where BOTH headers match
     await this.createQueue(
       "events.critical-errors",
-      "",  // routing key ignored for headers exchange
+      "",
       { durable: true },
       undefined,
       {
-        "x-match": "all",          // ALL headers must match
+        "x-match": "all",
         "severity": "critical",
         "type": "error",
       }
     );
 
-    // Queue that receives messages where ANY header matches
+    // Receives messages where ANY header matches
     await this.createQueue(
       "events.all-errors",
       "",
       { durable: true },
       undefined,
       {
-        "x-match": "any",          // ANY header can match
+        "x-match": "any",
         "type": "error",
-        "type2": "warning",
+        "severity": "critical",
       }
     );
 
-    console.log("Headers exchange setup complete");
+    console.log(`"${EventExchange.exchangeName}" headers exchange setup complete`);
   }
 }
 
@@ -59,28 +59,23 @@ async function main() {
   const exchange = new EventExchange();
   await exchange.setup(rabbit);
 
-  // This message matches "events.critical-errors" (both headers match)
-  const criticalError = new RabbitProducerExchanger(
-    "events.headers",
-    { message: "Database connection pool exhausted" },
-    "" // routing key doesn't matter for headers exchange
-  );
+  // Producer references static exchangeName — routing key ignored for headers
+  const producer = new RabbitProducer(EventExchange.exchangeName, "");
 
-  await criticalError.produceMessage(rabbit, {
-    headers: { severity: "critical", type: "error" },
-  });
+  // Both queues receive this (all headers match)
+  await producer.publish(
+    rabbit,
+    { message: "Database connection pool exhausted" },
+    { headers: { severity: "critical", type: "error" } }
+  );
   console.log("Critical error published → routes to both queues");
 
-  // This message only matches "events.all-errors" (only type matches)
-  const warning = new RabbitProducerExchanger(
-    "events.headers",
+  // Only "events.all-errors" receives this (only type matches)
+  await producer.publish(
+    rabbit,
     { message: "High memory usage detected" },
-    ""
+    { headers: { severity: "warning", type: "error" } }
   );
-
-  await warning.produceMessage(rabbit, {
-    headers: { severity: "warning", type: "error" },
-  });
   console.log("Warning published → routes to all-errors only");
 
   await rabbit.gracefulShutdown();

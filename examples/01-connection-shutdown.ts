@@ -7,7 +7,7 @@
  * - Graceful shutdown on SIGTERM/SIGINT
  */
 
-import { RabbitMqBaseClass } from "../src/connection.js";
+import { RabbitMqBaseClass } from "../src/index.js";
 
 async function main() {
   const rabbit = new RabbitMqBaseClass("amqp://guest:guest@localhost:5672", {
@@ -21,7 +21,6 @@ async function main() {
   await rabbit.ConnectToService();
   console.log("Connected to RabbitMQ!");
 
-  // Graceful shutdown on process signals
   const shutdown = async () => {
     console.log("Shutting down...");
     await rabbit.gracefulShutdown();

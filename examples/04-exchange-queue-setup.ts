@@ -2,40 +2,37 @@
  * Example: Exchange & Queue Setup
  *
  * Demonstrates:
- * - Creating an exchange (topic type)
+ * - Static exchangeName, exchangeType, exchangeOptions on the class
  * - Creating a queue with binding key
- * - Queue arguments: TTL, max-length, priority
+ * - Queue arguments: TTL, max-length, priority, lazy mode
  */
 
-import { RabbitMqBaseClass, RabbitMqQueueExchange } from "../src";
-
+import { RabbitMqBaseClass, RabbitMqQueueExchange } from "../src/index.js";
 
 class OrderExchange extends RabbitMqQueueExchange {
-  constructor() {
-    super("orders.exchange", "topic", { durable: true, autoDelete: false });
-  }
+  static exchangeName = "orders.exchange";
+  static exchangeType = "topic" as const;
+  static exchangeOptions = { durable: true, autoDelete: false };
 
   async setup(rabbit: RabbitMqBaseClass) {
     await this.startChannelization(rabbit);
     await this.createExchange();
 
-    // Basic queue bound to a routing pattern
     await this.createQueue("orders.created", "order.created.#");
 
-    // Queue with advanced arguments
     await this.createQueue(
       "orders.priority",
       "order.priority.*",
       { durable: true, autoDelete: false },
       {
-        "x-message-ttl": 120000,    // messages expire after 2 min
-        "x-max-length": 5000,       // max 5000 messages
-        "x-max-priority": 10,       // enable priority (0-10)
-        "x-queue-mode": "lazy",     // store to disk, save RAM
+        "x-message-ttl": 120000,
+        "x-max-length": 5000,
+        "x-max-priority": 10,
+        "x-queue-mode": "lazy",
       }
     );
 
-    console.log("Exchange and queues created successfully");
+    console.log(`Exchange "${OrderExchange.exchangeName}" and queues created`);
   }
 }
 

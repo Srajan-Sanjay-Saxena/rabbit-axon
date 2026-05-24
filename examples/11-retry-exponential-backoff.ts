@@ -14,23 +14,28 @@
 
 import {
   RabbitMqBaseClass,
-  RabbitProducerExchanger,
-} from "../Correct/Rabbit.singleton.correct";
+  RabbitMqQueueExchange,
+  RabbitConsumer,
+} from "../src/index.js";
+
+class PaymentExchange extends RabbitMqQueueExchange {
+  static exchangeName = "payments.exchange";
+  static exchangeType = "direct" as const;
+}
 
 async function main() {
   const rabbit = new RabbitMqBaseClass("amqp://localhost");
   await rabbit.ConnectToService();
 
-  const consumer = new RabbitProducerExchanger("payments.exchange", {});
+  const consumer = new RabbitConsumer(PaymentExchange.exchangeName);
 
-  await consumer.consumeMessage(
+  await consumer.consume(
     rabbit,
     "payments.process",
     async (data, msg) => {
       const attempt = (msg.properties.headers?.["x-retry-count"] ?? 0) + 1;
       console.log(`Processing payment ${data.paymentId} (attempt ${attempt})`);
 
-      // Simulate intermittent failure
       if (Math.random() < 0.7) {
         throw new Error("Payment gateway timeout");
       }
@@ -40,8 +45,8 @@ async function main() {
     {
       workerCount: 2,
       prefetchCount: 1,
-      requeueOnFailure: true,  // enable retry
-      retryLimit: 3,           // max 3 retries then DLX
+      requeueOnFailure: true,
+      retryLimit: 3,
     }
   );
 

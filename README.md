@@ -307,6 +307,78 @@ interface RabbitConnectionOptions {
 
 ---
 
+### ExchangeOptions
+
+```typescript
+interface ExchangeOptions {
+  durable?: boolean;           // Default: true — survives broker restart
+  autoDelete?: boolean;        // Default: false — delete when last queue unbinds
+  internal?: boolean;          // Default: false — only receives from other exchanges, not producers
+  alternateExchange?: string;  // Unroutable messages go here instead of being dropped
+  arguments?: Record<string, any>; // Custom broker-specific arguments
+}
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `durable` | `true` | Exchange survives broker restart. Set `false` for temporary/test exchanges. |
+| `autoDelete` | `false` | Exchange is deleted when the last queue unbinds from it. |
+| `internal` | `false` | Exchange can only receive messages from other exchanges (exchange-to-exchange binding), not directly from producers. Useful for multi-hop routing. |
+| `alternateExchange` | `undefined` | If a message can't be routed to any queue, it goes to this exchange instead of being silently dropped. Acts as a catch-all. |
+| `arguments` | `undefined` | Custom broker-specific arguments (rarely needed). |
+
+#### `internal` — Exchange-to-Exchange Routing
+
+An internal exchange cannot receive publishes directly. Messages must come from another exchange.
+
+```typescript
+class InternalExchange extends RabbitMqQueueExchange {
+  static exchangeName = "orders.internal";
+  static exchangeType = "topic" as const;
+  static exchangeOptions = { durable: true, internal: true };
+}
+
+// ✗ This will fail — can't publish directly to an internal exchange
+await producer.publish(rabbit, data); // ERROR
+
+// ✓ Must route from another exchange via exchange-to-exchange binding
+```
+
+**Use case:** Multi-hop routing where you want an intermediate exchange that only other exchanges can feed into.
+
+#### `alternateExchange` — Catch Unroutable Messages
+
+If a message doesn't match any queue binding, normally it's silently dropped. With `alternateExchange`, it goes to a fallback exchange instead.
+
+```typescript
+class MainExchange extends RabbitMqQueueExchange {
+  static exchangeName = "orders.main";
+  static exchangeType = "direct" as const;
+  static exchangeOptions = {
+    durable: true,
+    alternateExchange: "orders.unrouted", // catch-all
+  };
+}
+
+class UnroutedExchange extends RabbitMqQueueExchange {
+  static exchangeName = "orders.unrouted";
+  static exchangeType = "fanout" as const; // fanout catches everything
+
+  async setup(rabbit: RabbitMqBaseClass) {
+    await this.startChannelization(rabbit);
+    await this.createExchange();
+    await this.createQueue("orders.unrouted.queue", "");
+  }
+}
+
+// Message with routing key "order.unknown" doesn't match any binding
+// → instead of being dropped, it lands in "orders.unrouted.queue"
+```
+
+**Use case:** Debugging, auditing, ensuring no message is ever silently lost.
+
+---
+
 ### QueueArguments
 
 ```typescript

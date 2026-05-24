@@ -1,24 +1,19 @@
 import type amqp from "amqplib";
 import type { RabbitMqBaseClass } from "./connection.js";
-import type { ExchangeTopics, QueueArguments } from "./types.js";
+import type { ExchangeTopics, ExchangeOptions, QueueArguments } from "./types.js";
 
-export class RabbitMqQueueExchange {
-  public exchangeName: string;
-  public exchangeType: ExchangeTopics;
-  public exchangeOptions: amqp.Options.AssertExchange;
+export abstract class RabbitMqQueueExchange {
+  static exchangeName: string;
+  static exchangeType: ExchangeTopics;
+  static exchangeOptions: ExchangeOptions = {
+    durable: true,
+    autoDelete: false,
+  };
+
   private rabbitChannel!: amqp.Channel;
 
-  public constructor(
-    exchangeName: string,
-    exchangeType: ExchangeTopics,
-    exchangeOptions: amqp.Options.AssertExchange = {
-      durable: true,
-      autoDelete: false,
-    }
-  ) {
-    this.exchangeName = exchangeName;
-    this.exchangeType = exchangeType;
-    this.exchangeOptions = exchangeOptions;
+  private get config() {
+    return this.constructor as typeof RabbitMqQueueExchange;
   }
 
   protected async startChannelization(rabbitBaseInstance: RabbitMqBaseClass) {
@@ -27,14 +22,14 @@ export class RabbitMqQueueExchange {
 
   protected async createExchange() {
     await this.rabbitChannel.assertExchange(
-      this.exchangeName,
-      this.exchangeType,
-      this.exchangeOptions
+      this.config.exchangeName,
+      this.config.exchangeType,
+      this.config.exchangeOptions
     );
   }
 
   protected async deleteExchange(ifUnused = false) {
-    await this.rabbitChannel.deleteExchange(this.exchangeName, { ifUnused });
+    await this.rabbitChannel.deleteExchange(this.config.exchangeName, { ifUnused });
   }
 
   protected async createQueue(
@@ -53,7 +48,7 @@ export class RabbitMqQueueExchange {
     });
     await this.rabbitChannel.bindQueue(
       queueName,
-      this.exchangeName,
+      this.config.exchangeName,
       bindKey,
       headers
     );
@@ -94,7 +89,7 @@ export class RabbitMqQueueExchange {
   ) {
     await this.rabbitChannel.unbindQueue(
       queueName,
-      this.exchangeName,
+      this.config.exchangeName,
       bindKey,
       headers
     );

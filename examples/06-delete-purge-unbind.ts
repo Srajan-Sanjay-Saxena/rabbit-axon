@@ -8,33 +8,30 @@
  * - unbindQueue() — remove a binding between queue and exchange
  */
 
-import { RabbitMqBaseClass, RabbitMqQueueExchange } from "../src";
+import { RabbitMqBaseClass, RabbitMqQueueExchange } from "../src/index.js";
+
 class TempExchange extends RabbitMqQueueExchange {
-  constructor() {
-    super("temp.exchange", "topic", { durable: false, autoDelete: false });
-  }
+  static exchangeName = "temp.exchange";
+  static exchangeType = "topic" as const;
+  static exchangeOptions = { durable: false, autoDelete: false };
 
   async setup(rabbit: RabbitMqBaseClass) {
     await this.startChannelization(rabbit);
     await this.createExchange();
     await this.createQueue("temp.queue", "temp.#");
-    console.log("Setup done");
+    console.log(`"${TempExchange.exchangeName}" setup done`);
   }
 
   async demonstrateLifecycle() {
-    // Purge: remove all messages but keep the queue
     await this.purgeQueue("temp.queue");
     console.log("Queue purged — all messages removed");
 
-    // Unbind: detach queue from exchange (stops receiving new messages)
     await this.unbindQueue("temp.queue", "temp.#");
     console.log("Queue unbound from exchange");
 
-    // Delete queue: only if empty AND no active consumers
     await this.deleteQueue("temp.queue", true, true);
     console.log("Queue deleted (was empty and unused)");
 
-    // Delete exchange: only if no queues are bound
     await this.deleteExchange(true);
     console.log("Exchange deleted (was unused)");
   }

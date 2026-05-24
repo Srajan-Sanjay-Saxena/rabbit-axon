@@ -2,47 +2,57 @@
  * Example: Produce Message (Fire-and-Forget)
  *
  * Demonstrates:
- * - Publishing a message to an exchange with routing key
+ * - Using static exchangeName from the exchange class
  * - PublishOptions: persistent, priority, headers, messageId
- * - Channel is opened and closed automatically (try/finally)
+ * - Producer is reusable — data passed at publish time
  */
 
 import {
   RabbitMqBaseClass,
-  RabbitProducerExchanger,
-} from "../Correct/Rabbit.singleton.correct";
+  RabbitMqQueueExchange,
+  RabbitProducer,
+} from "../src/index.js";
+
+class OrderExchange extends RabbitMqQueueExchange {
+  static exchangeName = "orders.exchange";
+  static exchangeType = "topic" as const;
+}
 
 async function main() {
   const rabbit = new RabbitMqBaseClass("amqp://localhost");
 
-  // Simple publish
-  const simpleProducer = new RabbitProducerExchanger(
-    "orders.exchange",
-    { orderId: "ORD-001", item: "Widget", qty: 3 },
-    "order.created"
-  );
+  // Reference static exchangeName — no magic strings
+  const orderProducer = new RabbitProducer(OrderExchange.exchangeName, "order.created");
 
-  await simpleProducer.produceMessage(rabbit);
+  await orderProducer.publish(rabbit, {
+    orderId: "ORD-001",
+    item: "Widget",
+    qty: 3,
+  });
   console.log("Simple message published");
 
-  // Publish with full options
-  const priorityProducer = new RabbitProducerExchanger(
-    "orders.exchange",
+  await orderProducer.publish(
+    rabbit,
     { orderId: "ORD-002", item: "Gadget", qty: 1, urgent: true },
-    "order.created.priority"
+    {
+      persistent: true,
+      priority: 9,
+      messageId: "msg-ORD-002",
+      expiration: "300000",
+      headers: {
+        "x-source": "api-gateway",
+        "x-tenant-id": "tenant-42",
+      },
+    }
   );
-
-  await priorityProducer.produceMessage(rabbit, {
-    persistent: true,          // survives broker restart
-    priority: 9,               // high priority (if queue supports it)
-    messageId: "msg-ORD-002",  // application-level dedup ID
-    expiration: "300000",      // expires in 5 min if not consumed
-    headers: {
-      "x-source": "api-gateway",
-      "x-tenant-id": "tenant-42",
-    },
-  });
   console.log("Priority message published with options");
+
+  await orderProducer.publish(rabbit, {
+    orderId: "ORD-003",
+    item: "Doohickey",
+    qty: 10,
+  });
+  console.log("Third message published (same producer reused)");
 
   await rabbit.gracefulShutdown();
 }

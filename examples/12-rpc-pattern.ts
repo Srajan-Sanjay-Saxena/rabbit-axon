@@ -4,41 +4,39 @@
  * Demonstrates:
  * - correlationId: match response to request
  * - replyTo: tell the server where to send the response
- * - Useful for synchronous-style communication over async messaging
+ * - Static exchangeName for both producer and consumer
  */
 
-import amqp from "amqplib";
 import {
   RabbitMqBaseClass,
-  RabbitProducerExchanger,
-} from "../Correct/Rabbit.singleton.correct";
+  RabbitMqQueueExchange,
+  RabbitProducer,
+  RabbitConsumer,
+} from "../src/index.js";
 
-async function rpcClient() {
-  const rabbit = new RabbitMqBaseClass("amqp://localhost");
+class RpcExchange extends RabbitMqQueueExchange {
+  static exchangeName = "rpc.exchange";
+  static exchangeType = "direct" as const;
+}
+
+async function rpcClient(rabbit: RabbitMqBaseClass) {
   const channel = await rabbit.createChannel();
 
-  // Create exclusive reply queue (auto-delete, unique per client)
   const { queue: replyQueue } = await channel.assertQueue("", {
     exclusive: true,
   });
 
   const correlationId = `rpc-${Date.now()}-${Math.random()}`;
 
-  // Send RPC request
-  const producer = new RabbitProducerExchanger(
-    "rpc.exchange",
+  const producer = new RabbitProducer(RpcExchange.exchangeName, "rpc.request");
+  await producer.publish(
+    rabbit,
     { action: "getUser", userId: "user-42" },
-    "rpc.request"
+    { correlationId, replyTo: replyQueue }
   );
-
-  await producer.produceMessage(rabbit, {
-    correlationId,
-    replyTo: replyQueue,
-  });
 
   console.log(`[Client] Sent RPC request (correlationId: ${correlationId})`);
 
-  // Wait for response
   return new Promise<Record<string, any>>((resolve) => {
     channel.consume(
       replyQueue,
@@ -55,22 +53,17 @@ async function rpcClient() {
   });
 }
 
-async function rpcServer() {
-  const rabbit = new RabbitMqBaseClass("amqp://localhost");
-  await rabbit.ConnectToService();
+async function rpcServer(rabbit: RabbitMqBaseClass) {
+  const consumer = new RabbitConsumer(RpcExchange.exchangeName);
 
-  const consumer = new RabbitProducerExchanger("rpc.exchange", {});
-
-  await consumer.consumeMessage(
+  await consumer.consume(
     rabbit,
     "rpc.requests",
     async (data, msg) => {
       console.log("[Server] Processing RPC:", data.action);
 
-      // Process the request
       const result = { name: "John Doe", id: data.userId, active: true };
 
-      // Send response back to replyTo queue
       const channel = await rabbit.createChannel();
       channel.sendToQueue(
         msg.properties.replyTo,
@@ -87,11 +80,15 @@ async function rpcServer() {
   console.log("[Server] RPC server running...");
 }
 
-// Run both
 async function main() {
-  await rpcServer();
-  const response = await rpcClient();
+  const rabbit = new RabbitMqBaseClass("amqp://localhost");
+  await rabbit.ConnectToService();
+
+  await rpcServer(rabbit);
+  const response = await rpcClient(rabbit);
   console.log("Final response:", response);
+
+  await rabbit.gracefulShutdown();
 }
 
 main().catch(console.error);
