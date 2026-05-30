@@ -1,4 +1,4 @@
-# axon-rabbit
+# rabbit-axon
 
 Production-ready class-based TypeScript RabbitMQ wrapper — auto-reconnect, dead-letter exchange, publisher confirms, exponential backoff retries, message buffering, connection pooling, and structured Winston logging.
 
@@ -7,7 +7,7 @@ Production-ready class-based TypeScript RabbitMQ wrapper — auto-reconnect, dea
 ## Installation
 
 ```bash
-pnpm add axon-rabbit
+pnpm add rabbit-axon
 ```
 
 ---
@@ -42,7 +42,7 @@ import {
   RabbitMqQueueExchange,
   RabbitProducer,
   RabbitConsumer,
-} from "axon-rabbit";
+} from "rabbit-axon";
 
 // 1. Connect
 const handler = new RabbitSingleConnectionHandler("amqp://localhost");
@@ -86,7 +86,7 @@ process.on("SIGTERM", async () => {
 Single AMQP connection with auto-reconnect.
 
 ```typescript
-import { RabbitSingleConnectionHandler } from "axon-rabbit";
+import { RabbitSingleConnectionHandler } from "rabbit-axon";
 
 const handler = new RabbitSingleConnectionHandler("amqp://user:pass@localhost:5672", {
   heartbeat: 30,
@@ -111,7 +111,7 @@ await handler.gracefulShutdown();
 Multiple connections for high-throughput scenarios. Each connection in the pool has its own auto-reconnect.
 
 ```typescript
-import { RabbitConnectionPoolHandler } from "axon-rabbit";
+import { RabbitConnectionPoolHandler } from "rabbit-axon";
 
 const pool = new RabbitConnectionPoolHandler("amqp://localhost", 5, {
   heartbeat: 30,
@@ -135,7 +135,7 @@ await pool.gracefulShutdown();
 Every class creates a default Winston logger internally. Replace it with your own:
 
 ```typescript
-import { RabbitLogger, RabbitSingleConnectionHandler } from "axon-rabbit";
+import { RabbitLogger, RabbitSingleConnectionHandler } from "rabbit-axon";
 import winston from "winston";
 
 const myWinstonLogger = winston.createLogger({
