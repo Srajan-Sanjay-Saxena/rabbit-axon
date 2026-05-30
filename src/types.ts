@@ -43,13 +43,12 @@ export interface PublishOptions {
 }
 
 export interface ConsumeOptions {
-  workerCount?: number;
   prefetchCount?: number;
-  requeueOnFailure?: boolean;
   retryLimit?: number;
+  dlx?: boolean;
 }
 
-export type MessageHandler = (
-  data: Record<string, any>,
+export type MessageHandler<T extends Record<string, any> = Record<string, any>> = (
+  data: T,
   msg: amqp.ConsumeMessage
 ) => Promise<void>;
