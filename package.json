@@ -1,7 +1,7 @@
 {
-  "name": "rabbit-mq-service",
-  "version": "2.0.0",
-  "description": "Production-ready RabbitMQ wrapper with reconnection, DLX, confirms, and multi-worker consumers",
+  "name": "axon-rabbit",
+  "version": "1.0.0",
+  "description": "Class-based TypeScript RabbitMQ wrapper with auto-reconnect, DLX, publisher confirms and exponential backoff",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,7 +12,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc",
@@ -27,10 +29,28 @@
     "amqp",
     "message-queue",
     "producer",
-    "consumer"
+    "consumer",
+    "typescript",
+    "reconnect",
+    "dlx",
+    "dead-letter",
+    "publisher-confirms",
+    "exponential-backoff",
+    "axon"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "Srajan Saxena",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Srajan-Sanjay-Saxena/rabbit-axon.git"
+  },
+  "homepage": "https://github.com/Srajan-Sanjay-Saxena/rabbit-axon#readme",
+  "bugs": {
+    "url": "https://github.com/Srajan-Sanjay-Saxena/rabbit-axon/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "packageManager": "pnpm@10.6.4",
   "dependencies": {
     "amqplib": "^0.10.8",
