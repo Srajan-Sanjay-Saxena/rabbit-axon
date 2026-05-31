@@ -1,4 +1,5 @@
 import amqp from "amqplib";
+import { ChannelManager } from "../channel/manager.js";
 import { RabbitLogger } from "../logger/logger.js";
 import type { RabbitConnectionOptions } from "../types.js";
 
@@ -8,10 +9,14 @@ export interface IRabbitConnection {
   gracefulShutdown(): Promise<void>;
   addLogger(logger: RabbitLogger): void;
   get rabbitConnection(): amqp.ChannelModel | null;
+  getChannel(): Promise<amqp.Channel>;
+  getConfirmChannel(): Promise<amqp.ConfirmChannel>;
 }
 
 export class RabbitSingleConnectionHandler implements IRabbitConnection {
   private _rabbitConnection: amqp.ChannelModel | null = null;
+  private _channel: amqp.Channel | null = null;
+  private _confirmChannel: amqp.ConfirmChannel | null = null;
   private rabbitConnString: string;
   private options: Required<RabbitConnectionOptions>;
   private reconnectAttempts = 0;
@@ -57,8 +62,34 @@ export class RabbitSingleConnectionHandler implements IRabbitConnection {
     this._rabbitConnection.on("close", () => {
       this.logger.warn("Connection closed", "SingleConnection");
       this._rabbitConnection = null;
+      this._channel = null;
+      this._confirmChannel = null;
       if (!this.isShuttingDown) this.Reconnect();
     });
+  }
+
+  public async getChannel(): Promise<amqp.Channel> {
+    if (!this._rabbitConnection) throw new Error("[SingleConnection] No active connection");
+    if (!this._channel) {
+      this._channel = await ChannelManager.createChannel(this._rabbitConnection, () => {
+        this.logger.warn("Channel closed", "SingleConnection");
+        this._channel = null;
+      });
+      this.logger.debug("Channel created", "SingleConnection");
+    }
+    return this._channel;
+  }
+
+  public async getConfirmChannel(): Promise<amqp.ConfirmChannel> {
+    if (!this._rabbitConnection) throw new Error("[SingleConnection] No active connection");
+    if (!this._confirmChannel) {
+      this._confirmChannel = await ChannelManager.createConfirmChannel(this._rabbitConnection, () => {
+        this.logger.warn("Confirm channel closed", "SingleConnection");
+        this._confirmChannel = null;
+      });
+      this.logger.debug("Confirm channel created", "SingleConnection");
+    }
+    return this._confirmChannel;
   }
 
   private async Reconnect() {
@@ -90,6 +121,8 @@ export class RabbitSingleConnectionHandler implements IRabbitConnection {
   public async gracefulShutdown() {
     this.logger.info("Initiating graceful shutdown", "SingleConnection");
     this.isShuttingDown = true;
+    this._channel = null;
+    this._confirmChannel = null;
     if (this._rabbitConnection) {
       await this._rabbitConnection.close();
       this._rabbitConnection = null;
