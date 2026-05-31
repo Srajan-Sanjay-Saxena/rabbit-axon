@@ -1,20 +1,17 @@
 import type amqp from "amqplib";
-import { ChannelManager } from "../channel/manager.js";
 import { RabbitLogger } from "../logger/logger.js";
 import type { IRabbitConnection } from "../connection/single.js";
 import type { ConsumeOptions, MessageHandler } from "../types.js";
 
 export class RabbitConsumer<T extends Record<string, any> = Record<string, any>> {
   private connInstance: IRabbitConnection;
-  private channel: amqp.Channel | null = null;
   private logger: RabbitLogger;
 
   public constructor(connInstance: IRabbitConnection) {
     this.connInstance = connInstance;
     this.logger = new RabbitLogger();
     connInstance.onReconnect(async () => {
-      this.logger.info("Reconnected — resetting consumer channel", "Consumer");
-      this.channel = null;
+      this.logger.info("Reconnected — channel will be recreated on next consume", "Consumer");
     });
   }
 
@@ -23,19 +20,12 @@ export class RabbitConsumer<T extends Record<string, any> = Record<string, any>>
   }
 
   private async getChannel(): Promise<amqp.Channel> {
-    const conn = this.connInstance.rabbitConnection;
-    if (!conn) {
+    try {
+      return await this.connInstance.getChannel();
+    } catch (err) {
       this.logger.error("Cannot get channel — no active connection", "Consumer");
-      throw new Error("[Consumer] No active connection");
+      throw err;
     }
-    if (!this.channel) {
-      this.channel = await ChannelManager.createChannel(conn, () => {
-        this.logger.warn("Consumer channel closed", "Consumer");
-        this.channel = null;
-      });
-      this.logger.debug("Consumer channel created", "Consumer");
-    }
-    return this.channel;
   }
 
   private async retryWithBackoff(
