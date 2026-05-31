@@ -27,6 +27,8 @@ src/
 │   └── producer.ts     — Publish, confirm publish, message buffering
 ├── consumer/
 │   └── consumer.ts     — Consume, DLX routing, retry backoff
+├── serializer/
+│   └── serializer.ts   — ISerializer, JsonSerializer, MsgpackSerializer, IdentitySerializer
 ├── logger/
 │   └── logger.ts       — Winston-based structured logger
 └── types.ts            — All interfaces and type aliases
@@ -438,6 +440,76 @@ process.on("SIGTERM", async () => {
 
 ---
 
+## Serialization
+
+By default all messages are serialized as JSON. You can swap to MessagePack for smaller, faster payloads or use the Identity serializer for raw binary data.
+
+```typescript
+import { JsonSerializer, MsgpackSerializer, IdentitySerializer } from "rabbit-axon";
+```
+
+### JSON (default)
+
+```typescript
+const producer = new RabbitProducer(handler, "orders", "order.created");
+await producer.publish({ orderId: "ORD-1" }); // serialized as JSON
+```
+
+### MessagePack — smaller and faster
+
+```typescript
+const producer = new RabbitProducer(handler, "orders", "order.created", {
+  serializer: new MsgpackSerializer(),
+});
+await producer.publish({ orderId: "ORD-1" }); // serialized as msgpack, ~2-3x smaller
+```
+
+### Identity — raw Buffer passthrough
+
+For protobuf, avro, encrypted payloads, or any binary data you encode yourself:
+
+```typescript
+const producer = new RabbitProducer(handler, "orders", "order.created", {
+  serializer: new IdentitySerializer(),
+});
+
+// you handle encoding
+const bytes = OrderProto.encode({ orderId: "ORD-1" }).finish();
+await producer.publish(Buffer.from(bytes));
+```
+
+### Auto-detection on consumer
+
+The producer sets a `contentType` header on every message (`application/json`, `application/msgpack`, `application/octet-stream`). The consumer reads it and picks the correct deserializer automatically — no manual configuration needed:
+
+```typescript
+// consumer uses JSON by default but auto-detects msgpack from contentType
+const consumer = new RabbitConsumer(handler);
+await consumer.consume("orders.created", async (data) => {
+  console.log(data.orderId); // correctly deserialized regardless of producer serializer
+});
+```
+
+### Custom serializer
+
+Implement `ISerializer` to plug in any format:
+
+```typescript
+import { ISerializer } from "rabbit-axon";
+
+class AvroSerializer implements ISerializer {
+  readonly contentType = "application/avro";
+  serialize(data: unknown): Buffer { /* your avro encode */ }
+  deserialize(buffer: Buffer): unknown { /* your avro decode */ }
+}
+
+const producer = new RabbitProducer(handler, "orders", "order.created", {
+  serializer: new AvroSerializer(),
+});
+```
+
+---
+
 ## API Reference
 
 ### Connection Options
@@ -565,6 +637,28 @@ await producer.publish({ orderId: "ORD-1" }, {
 
 ---
 
+### Producer Options
+
+Passed as the fourth argument to `RabbitProducer` constructor.
+
+```typescript
+new RabbitProducer(connInstance, exchangeName, routingKey, options)
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxBufferSize` | `number` | `10000` | Max messages to buffer when connection is down. |
+| `serializer` | `ISerializer` | `JsonSerializer` | Serializer to use for message encoding. |
+
+```typescript
+const producer = new RabbitProducer(handler, "orders", "order.created", {
+  maxBufferSize: 5000,
+  serializer: new MsgpackSerializer(),
+});
+```
+
+---
+
 ### Consume Options
 
 Passed as the third argument to `consumer.consume()`.
@@ -578,6 +672,7 @@ await consumer.consume(queueName, handler, consumeOptions)
 | `prefetchCount` | `number` | `1` | Max unacknowledged messages held by this consumer at a time. |
 | `retryLimit` | `number` | `3` | Max retry attempts before acking and skipping (only when `dlx: false`). |
 | `dlx` | `boolean` | `false` | If `true`, failed messages are nacked immediately to DLX. If `false`, retried with exponential backoff. |
+| `serializer` | `ISerializer` | `JsonSerializer` | Override default serializer for this consume call. Consumer still auto-detects from `contentType` first. |
 
 ```typescript
 // with DLX
