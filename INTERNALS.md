@@ -260,3 +260,105 @@ after retryLimit → nack without requeue → DLX
 Formula: `min(1000 * 2^retryCount, 30000)` — capped at 30 seconds.
 
 Retry count is tracked via the `x-retry-count` header on the message itself.
+
+---
+
+## Serialization — JSON vs MessagePack vs Identity
+
+### What is serialization?
+
+RabbitMQ moves bytes — it has no concept of objects, strings, or numbers. Before a message can be sent over the network it must be **serialized** (object → bytes) and after receiving it must be **deserialized** (bytes → object).
+
+```
+{ orderId: "ORD-1" }  →  serialize  →  [bytes]  →  RabbitMQ  →  [bytes]  →  deserialize  →  { orderId: "ORD-1" }
+```
+
+### The three serializers
+
+**`JsonSerializer` — `application/json` (default)**
+
+Converts object to a UTF-8 string of bytes. Human readable.
+
+```
+{ orderId: "ORD-1", amount: 99.99 }
+→ '{"orderId":"ORD-1","amount":99.99}'
+→ [123, 34, 111, 114, 100, 101, 114, 73, 100, ...]
+```
+
+**`MsgpackSerializer` — `application/msgpack`**
+
+Binary format. Same data as JSON but encoded as compact binary — 2-3x smaller, 2-3x faster to parse.
+
+```
+{ orderId: "ORD-1", amount: 99.99 }
+→ [130, 167, 111, 114, 100, 101, 114, 73, 100, ...]  (binary, not readable)
+```
+
+**`IdentitySerializer` — `application/octet-stream`**
+
+Raw bytes passthrough. No serialization — you pass a `Buffer`, we send it as-is. For when you handle encoding yourself (protobuf, avro, images, PDFs etc).
+
+```typescript
+const encoded = OrderProto.encode({ orderId: "ORD-1" }).finish();
+await producer.publish(encoded); // sent exactly as-is
+```
+
+### Why JSON is the default despite being slower
+
+**1. Human readability matters in production**
+
+When something breaks at 3am, you open RabbitMQ management UI and read the queued message directly. JSON shows `{"orderId":"ORD-1"}`. MessagePack shows `[130, 167, 111, 114...]`. Debugging binary is painful.
+
+**2. The performance difference rarely matters**
+
+Most systems don't publish thousands of messages per second. At 100 messages/sec the difference between JSON and msgpack is microseconds — irrelevant. You'd optimize database queries long before message serialization becomes a bottleneck.
+
+**3. JSON is universal**
+
+Every language, every framework, every tool speaks JSON natively. MessagePack needs a library on both producer and consumer. In a polyglot microservices environment (Node, Python, Go, Java) JSON just works everywhere.
+
+**4. Tooling is built around JSON**
+
+RabbitMQ management UI, logging pipelines, monitoring dashboards, message inspectors — all built around JSON. MessagePack messages appear as garbage bytes in all of these.
+
+**5. Network is rarely the bottleneck**
+
+In most architectures the bottleneck is database queries, business logic, or external API calls — not message payload size. Optimizing serialization is premature optimization in 99% of cases.
+
+### When MessagePack actually makes sense
+
+- Publishing millions of messages per second
+- Large payloads (kilobytes per message)
+- You control both producer and consumer (same team, same codebase)
+- Network bandwidth is genuinely constrained (IoT, mobile, edge)
+
+### contentType auto-detection
+
+Producer sets `contentType` on every message from the serializer:
+
+```
+message.properties.contentType = "application/msgpack"
+```
+
+Consumer reads it and picks the correct deserializer automatically — even if the consumer was configured with a different default. The message carries its own format information so producer and consumer don't need to be manually kept in sync.
+
+```typescript
+private deserialize(msg: amqp.ConsumeMessage): T {
+  const contentType = msg.properties.contentType;
+  const serializer = serializerRegistry[contentType] ?? this.serializer;
+  return serializer.deserialize(msg.content) as T;
+}
+```
+
+### Why protobuf is not a built-in serializer
+
+Protobuf requires a shared `.proto` schema file on both producer and consumer. The library can't manage schemas — that's the user's responsibility. So protobuf is supported via `IdentitySerializer` — user encodes/decodes themselves and passes raw `Buffer` to us.
+
+```typescript
+// user handles protobuf encoding
+const buf = OrderProto.encode({ orderId: "ORD-1" }).finish();
+const producer = new RabbitProducer(handler, "orders", "order.created", {
+  serializer: new IdentitySerializer()
+});
+await producer.publish(Buffer.from(buf));
+```
