@@ -1,5 +1,4 @@
 import type amqp from "amqplib";
-import { ChannelManager } from "../channel/manager.js";
 import { RabbitLogger } from "../logger/logger.js";
 import type { PublishOptions } from "../types.js";
 import type { IRabbitConnection } from "../connection/single.js";
@@ -17,8 +16,6 @@ export class RabbitProducer<T extends Record<string, any> = Record<string, any>>
   private routingKey: string;
   private buffer: BufferedMessage<T>[] = [];
   private maxBufferSize: number;
-  private channel: amqp.Channel | null = null;
-  private confirmChannel: amqp.ConfirmChannel | null = null;
   private connInstance: IRabbitConnection;
   private logger: RabbitLogger;
 
@@ -34,12 +31,10 @@ export class RabbitProducer<T extends Record<string, any> = Record<string, any>>
     this.maxBufferSize = maxBufferSize;
     this.logger = new RabbitLogger();
     connInstance.onReconnect(async () => {
-      this.logger.info("Reconnected — resetting channels and flushing buffer", "Producer", {
+      this.logger.info("Reconnected — flushing buffer", "Producer", {
         exchange: this.exchangeName,
         buffered: this.buffer.length,
       });
-      this.channel = null;
-      this.confirmChannel = null;
       await this.flushBuffer();
     });
   }
@@ -49,29 +44,20 @@ export class RabbitProducer<T extends Record<string, any> = Record<string, any>>
   }
 
   private async getChannel(): Promise<amqp.Channel> {
-    const conn = this.connInstance.rabbitConnection;
-    if (!conn) throw new Error("[Producer] No active connection");
-    if (!this.channel) {
-      this.channel = await ChannelManager.createChannel(conn, () => {
-        this.logger.warn("Producer channel closed", "Producer", { exchange: this.exchangeName });
-        this.channel = null;
-      });
-      this.logger.debug("Producer channel created", "Producer", { exchange: this.exchangeName });
+    try {
+      return await this.connInstance.getChannel();
+    } catch {
+      this.logger.warn("Publish failed, buffering message", "Producer", { exchange: this.exchangeName });
+      throw new Error("[Producer] No active connection");
     }
-    return this.channel;
   }
 
   private async getConfirmChannel(): Promise<amqp.ConfirmChannel> {
-    const conn = this.connInstance.rabbitConnection;
-    if (!conn) throw new Error("[Producer] No active connection");
-    if (!this.confirmChannel) {
-      this.confirmChannel = await ChannelManager.createConfirmChannel(conn, () => {
-        this.logger.warn("Producer confirm channel closed", "Producer", { exchange: this.exchangeName });
-        this.confirmChannel = null;
-      });
-      this.logger.debug("Producer confirm channel created", "Producer", { exchange: this.exchangeName });
+    try {
+      return await this.connInstance.getConfirmChannel();
+    } catch {
+      throw new Error("[Producer] No active connection");
     }
-    return this.confirmChannel;
   }
 
   private buildPublishOpts(options: PublishOptions): amqp.Options.Publish {
