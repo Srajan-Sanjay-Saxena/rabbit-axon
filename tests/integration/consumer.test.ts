@@ -235,6 +235,6 @@ describe("RabbitConsumer", () => {
     await handler2.gracefulShutdown();
 
     const consumer = new RabbitConsumer(handler2);
-    await expect(consumer.consume("some.queue", async () => {})).rejects.toThrow("[Consumer] No active connection");
+    await expect(consumer.consume("some.queue", async () => {})).rejects.toThrow("No active connection");
   });
 });
