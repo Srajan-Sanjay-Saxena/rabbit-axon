@@ -18,7 +18,7 @@ pnpm add rabbit-axon
 src/
 ├── connection/
 │   ├── single.ts       — Single connection handler with auto-reconnect
-│   └── pool.ts         — Connection pool handler (acquire)
+│   └── pool.ts         — Connection pool handler (round-robin load balancing)
 ├── channel/
 │   └── manager.ts      — Static channel utility (create, close)
 ├── exchange/
@@ -108,7 +108,7 @@ await handler.gracefulShutdown();
 
 ### RabbitConnectionPoolHandler
 
-Multiple connections for high-throughput scenarios. Each connection in the pool has its own auto-reconnect.
+Multiple connections for high-throughput scenarios. Each connection in the pool has its own channel, and publishes are distributed via round-robin across all connections automatically — no manual acquire/release needed.
 
 ```typescript
 import { RabbitConnectionPoolHandler } from "rabbit-axon";
@@ -119,14 +119,23 @@ const pool = new RabbitConnectionPoolHandler("amqp://localhost", 5, {
 
 await pool.ConnectToService();
 
-// Acquire an active connection (round-robin, skips dropped connections)
-const conn = pool.acquire();
+// use pool directly with producer — round-robin load balancing across 5 connections
+const producer = new RabbitProducer(pool, "orders", "order.created");
+await producer.publish({ orderId: "ORD-1" }); // uses conn1
+await producer.publish({ orderId: "ORD-2" }); // uses conn2
+await producer.publish({ orderId: "ORD-3" }); // uses conn3
+// ... wraps around automatically
 
-// Pass to exchange, producer, or consumer
-const producer = new RabbitProducer(conn, "orders", "order.created");
+// use pool directly with consumer
+const consumer = new RabbitConsumer(pool);
+await consumer.consume("orders.created", async (data) => {
+  console.log(data.orderId);
+});
 
 await pool.gracefulShutdown();
 ```
+
+Internally the pool maintains a `Map<connection, channel>` — one channel per connection. Round-robin picks the next connection on each `getChannel()` call, reusing the existing channel for that connection if it's still alive.
 
 ---
 
