@@ -139,7 +139,7 @@ describe("RabbitProducer", () => {
     });
     await handler2.ConnectToService();
 
-    const producer = new RabbitProducer(handler2, "orders", "order.overflow", 2);
+    const producer = new RabbitProducer(handler2, "orders", "order.overflow", { maxBufferSize: 2 });
 
     await handler2.rabbitConnection!.close();
     await new Promise((r) => setTimeout(r, 50));
