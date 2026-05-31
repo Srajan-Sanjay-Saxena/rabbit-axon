@@ -16,7 +16,7 @@ const serializerRegistry: Record<string, ISerializer> = {
 };
 
 export class RabbitConsumer<
-  T extends Record<string, any> = Record<string, any>,
+  T extends Record<string, any> | Buffer = Record<string, any>,
 > {
   private connInstance: IRabbitConnection;
   private serializer: ISerializer;

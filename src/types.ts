@@ -49,7 +49,7 @@ export interface ConsumeOptions {
   serializer?: import("./serializer/serializer.js").ISerializer;
 }
 
-export type MessageHandler<T extends Record<string, any> = Record<string, any>> = (
+export type MessageHandler<T extends Record<string, any> | Buffer = Record<string, any>> = (
   data: T,
   msg: amqp.ConsumeMessage
 ) => Promise<void>;

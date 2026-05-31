@@ -469,13 +469,37 @@ await producer.publish({ orderId: "ORD-1" }); // serialized as msgpack, ~2-3x sm
 For protobuf, avro, encrypted payloads, or any binary data you encode yourself:
 
 ```typescript
-const producer = new RabbitProducer(handler, "orders", "order.created", {
+const producer = new RabbitProducer<Buffer>(handler, "orders", "order.created", {
   serializer: new IdentitySerializer(),
 });
 
 // you handle encoding
 const bytes = OrderProto.encode({ orderId: "ORD-1" }).finish();
 await producer.publish(Buffer.from(bytes));
+
+// consumer receives raw Buffer
+const consumer = new RabbitConsumer<Buffer>(handler, {
+  serializer: new IdentitySerializer(),
+});
+await consumer.consume("orders.created", async (data) => {
+  const decoded = OrderProto.decode(data); // data is Buffer — fully typed
+});
+```
+
+### TypeScript generics — `T extends Record<string, any> | Buffer`
+
+Both `RabbitProducer<T>` and `RabbitConsumer<T>` accept either an object type or `Buffer`. Default is `Record<string, any>`:
+
+```typescript
+// default — object payload, fully typed
+const producer = new RabbitProducer<{ orderId: string }>(handler, "orders", "order.created");
+await producer.publish({ orderId: "ORD-1" }); // type checked
+
+// binary — Buffer payload
+const producer = new RabbitProducer<Buffer>(handler, "rpc", "call", {
+  serializer: new IdentitySerializer(),
+});
+await producer.publish(Buffer.from([0x01, 0x02, 0x03]));
 ```
 
 ### Auto-detection on consumer

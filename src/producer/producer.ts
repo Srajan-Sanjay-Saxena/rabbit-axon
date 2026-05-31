@@ -7,7 +7,7 @@ import {
   defaultSerializer,
 } from "../serializer/serializer.js";
 
-interface BufferedMessage<T extends Record<string, any>> {
+interface BufferedMessage<T extends Record<string, any> | Buffer> {
   data: T;
   options: PublishOptions;
   resolve: (value: boolean) => void;
@@ -20,7 +20,7 @@ export interface ProducerOptions {
   serializer?: ISerializer;
 }
 
-export class RabbitProducer<T extends Record<string, any> = Record<string, any>> {
+export class RabbitProducer<T extends Record<string, any> | Buffer = Record<string, any>> {
   private exchangeName: string;
   private routingKey: string;
   private buffer: BufferedMessage<T>[] = [];
