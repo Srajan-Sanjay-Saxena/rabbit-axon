@@ -2,16 +2,38 @@ import type amqp from "amqplib";
 import { RabbitLogger } from "../logger/logger.js";
 import type { IRabbitConnection } from "../connection/single.js";
 import type { ConsumeOptions, MessageHandler } from "../types.js";
+import {
+  type ISerializer,
+  defaultSerializer,
+  MsgpackSerializer,
+  IdentitySerializer,
+} from "../serializer/serializer.js";
 
-export class RabbitConsumer<T extends Record<string, any> = Record<string, any>> {
+const serializerRegistry: Record<string, ISerializer> = {
+  "application/json": defaultSerializer,
+  "application/msgpack": new MsgpackSerializer(),
+  "application/octet-stream": new IdentitySerializer(),
+};
+
+export class RabbitConsumer<
+  T extends Record<string, any> = Record<string, any>,
+> {
   private connInstance: IRabbitConnection;
+  private serializer: ISerializer;
   private logger: RabbitLogger;
 
-  public constructor(connInstance: IRabbitConnection) {
+  public constructor(
+    connInstance: IRabbitConnection,
+    options: { serializer?: ISerializer } = {},
+  ) {
     this.connInstance = connInstance;
+    this.serializer = options.serializer ?? defaultSerializer;
     this.logger = new RabbitLogger();
     connInstance.onReconnect(async () => {
-      this.logger.info("Reconnected — channel will be recreated on next consume", "Consumer");
+      this.logger.info(
+        "Reconnected — channel will be recreated on next consume",
+        "Consumer",
+      );
     });
   }
 
@@ -23,9 +45,20 @@ export class RabbitConsumer<T extends Record<string, any> = Record<string, any>>
     try {
       return await this.connInstance.getChannel();
     } catch (err) {
-      this.logger.error("Cannot get channel — no active connection", "Consumer");
+      this.logger.error(
+        "Cannot get channel — no active connection",
+        "Consumer",
+      );
       throw err;
     }
+  }
+
+  private deserialize(msg: amqp.ConsumeMessage): T {
+    const contentType = msg.properties.contentType as string | undefined;
+    const serializer =
+      (contentType ? serializerRegistry[contentType] : undefined) ??
+      this.serializer;
+    return serializer.deserialize(msg.content) as T;
   }
 
   private async retryWithBackoff(
@@ -43,7 +76,12 @@ export class RabbitConsumer<T extends Record<string, any> = Record<string, any>>
       } catch (err) {
         if (attempt === retryLimit) throw err;
         const delay = Math.min(1000 * 2 ** attempt, 30000);
-        this.logger.warn("Retrying message", "Consumer", { attempt: attempt + 1, retryLimit, delay, queue });
+        this.logger.warn("Retrying message", "Consumer", {
+          attempt: attempt + 1,
+          retryLimit,
+          delay,
+          queue,
+        });
         await new Promise((r) => setTimeout(r, delay));
         attempt++;
       }
@@ -53,10 +91,15 @@ export class RabbitConsumer<T extends Record<string, any> = Record<string, any>>
   public async consume(
     queueName: string,
     handler: MessageHandler<T>,
-    options: ConsumeOptions = {}
+    options: ConsumeOptions = {},
   ) {
     const { prefetchCount = 1, retryLimit = 3, dlx = false } = options;
-    this.logger.info("Setting up consumer", "Consumer", { queue: queueName, prefetchCount, dlx });
+    this.logger.info("Setting up consumer", "Consumer", {
+      queue: queueName,
+      prefetchCount,
+      dlx,
+      serializer: this.serializer.contentType,
+    });
 
     const startConsuming = async () => {
       const channel = await this.getChannel();
@@ -66,36 +109,56 @@ export class RabbitConsumer<T extends Record<string, any> = Record<string, any>>
         queueName,
         async (msg) => {
           if (msg === null) return;
-          const data = JSON.parse(msg.content.toString()) as T;
+          const data = this.deserialize(msg);
 
           if (dlx) {
             try {
               await handler(data, msg);
               channel.ack(msg);
             } catch (err) {
-              this.logger.error("Processing failed, routing to DLX", "Consumer", { queue: queueName, err });
+              this.logger.error(
+                "Processing failed, routing to DLX",
+                "Consumer",
+                { queue: queueName, err },
+              );
               channel.nack(msg, false, false);
             }
           } else {
             try {
-              await this.retryWithBackoff(handler, data, msg, retryLimit, queueName);
+              await this.retryWithBackoff(
+                handler,
+                data,
+                msg,
+                retryLimit,
+                queueName,
+              );
               channel.ack(msg);
             } catch (err) {
-              this.logger.error("Message failed after all retries, skipping", "Consumer", { queue: queueName, retryLimit, err });
+              this.logger.error(
+                "Message failed after all retries, skipping",
+                "Consumer",
+                { queue: queueName, retryLimit, err },
+              );
               channel.ack(msg);
             }
           }
         },
-        { noAck: false }
+        { noAck: false },
       );
 
-      this.logger.info("Consumer started", "Consumer", { queue: queueName, prefetch: prefetchCount, dlx });
+      this.logger.info("Consumer started", "Consumer", {
+        queue: queueName,
+        prefetch: prefetchCount,
+        dlx,
+      });
     };
 
     await startConsuming();
 
     this.connInstance.onReconnect(async () => {
-      this.logger.info("Re-establishing consumer after reconnect", "Consumer", { queue: queueName });
+      this.logger.info("Re-establishing consumer after reconnect", "Consumer", {
+        queue: queueName,
+      });
       await startConsuming();
     });
   }
