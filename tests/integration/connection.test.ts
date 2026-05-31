@@ -110,56 +110,49 @@ describe("RabbitSingleConnectionHandler", () => {
 });
 
 describe("RabbitConnectionPoolHandler", () => {
-  it("initializes all connections and acquire returns active ones", async () => {
+  it("initializes pool and rabbitConnection is active", async () => {
     const pool = new RabbitConnectionPoolHandler(amqpUrl, 3);
     await pool.ConnectToService();
 
-    const c1 = pool.acquire();
-    const c2 = pool.acquire();
-    const c3 = pool.acquire();
-
-    expect(c1.rabbitConnection).not.toBeNull();
-    expect(c2.rabbitConnection).not.toBeNull();
-    expect(c3.rabbitConnection).not.toBeNull();
+    expect(pool.rabbitConnection).not.toBeNull();
 
     await pool.gracefulShutdown();
   });
 
-  it("acquire skips dropped connections and returns next active one", async () => {
+  it("getChannel round-robins — returns different channels per connection", async () => {
     const pool = new RabbitConnectionPoolHandler(amqpUrl, 3);
     await pool.ConnectToService();
 
-    // drop the first connection
-    const first = pool.acquire();
-    await first.rabbitConnection!.close();
-    await new Promise((r) => setTimeout(r, 100));
+    const ch1 = await pool.getChannel();
+    const ch2 = await pool.getChannel();
+    const ch3 = await pool.getChannel();
 
-    // acquire should skip the dropped one and return an active connection
-    const active = pool.acquire();
-    expect(active.rabbitConnection).not.toBeNull();
-    expect(active).not.toBe(first);
+    expect(ch1).toBeDefined();
+    expect(ch2).toBeDefined();
+    expect(ch3).toBeDefined();
+
+    // 4th call wraps around — reuses ch1
+    const ch4 = await pool.getChannel();
+    expect(ch4).toBe(ch1);
 
     await pool.gracefulShutdown();
   });
 
-  it("throws when all connections are dropped", async () => {
+  it("rabbitConnection returns null when all connections are dropped", async () => {
     const pool = new RabbitConnectionPoolHandler(amqpUrl, 2, {
       maxReconnectAttempts: 0,
     });
     await pool.ConnectToService();
 
-    // close both connections sequentially, waiting for null between each
-    const c1 = pool.acquire();
-    const conn1 = c1.rabbitConnection!;
+    const conn1 = pool.rabbitConnection!;
     await conn1.close();
     await new Promise((r) => setTimeout(r, 100));
 
-    const c2 = pool.acquire();
-    const conn2 = c2.rabbitConnection!;
+    const conn2 = pool.rabbitConnection!;
     await conn2.close();
     await new Promise((r) => setTimeout(r, 100));
 
-    expect(() => pool.acquire()).toThrow("[ConnectionPool] No active connections available");
+    expect(pool.rabbitConnection).toBeNull();
 
     await pool.gracefulShutdown();
   });
@@ -169,6 +162,6 @@ describe("RabbitConnectionPoolHandler", () => {
     await pool.ConnectToService();
     await pool.gracefulShutdown();
 
-    expect(() => pool.acquire()).toThrow("[ConnectionPool] No connections available");
+    expect(pool.rabbitConnection).toBeNull();
   });
 });
