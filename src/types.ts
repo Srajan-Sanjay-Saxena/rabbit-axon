@@ -46,6 +46,7 @@ export interface ConsumeOptions {
   prefetchCount?: number;
   retryLimit?: number;
   dlx?: boolean;
+  serializer?: import("./serializer/serializer.js").ISerializer;
 }
 
 export type MessageHandler<T extends Record<string, any> = Record<string, any>> = (
