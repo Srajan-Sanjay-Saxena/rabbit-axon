@@ -10,12 +10,17 @@ export interface ExchangeOptions {
   arguments?: Record<string, any>;
 }
 
+export interface CircuitBreakerOptions {
+  threshold?: number;
+  resetTimeout?: number;
+  maxResetTimeout?: number;
+}
+
 export interface RabbitConnectionOptions {
   heartbeat?: number;
-  reconnectInterval?: number;
-  maxReconnectAttempts?: number;
   frameMax?: number;
   channelMax?: number;
+  circuitBreaker?: CircuitBreakerOptions;
 }
 
 export interface QueueArguments {

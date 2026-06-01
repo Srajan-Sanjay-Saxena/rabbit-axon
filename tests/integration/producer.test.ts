@@ -97,8 +97,7 @@ describe("RabbitProducer", () => {
 
   it("buffers messages on connection drop, flushes after reconnect, caller unblocks", async () => {
     const handler2 = new RabbitSingleConnectionHandler(amqpUrl, {
-      reconnectInterval: 300,
-      maxReconnectAttempts: 5,
+      circuitBreaker: { threshold: 5, resetTimeout: 300 },
     });
     await handler2.ConnectToService();
 
@@ -134,8 +133,7 @@ describe("RabbitProducer", () => {
 
   it("rejects immediately when buffer is full", async () => {
     const handler2 = new RabbitSingleConnectionHandler(amqpUrl, {
-      reconnectInterval: 300,
-      maxReconnectAttempts: 0,
+      circuitBreaker: { threshold: 0, resetTimeout: 60000 },
     });
     await handler2.ConnectToService();
 
@@ -154,8 +152,7 @@ describe("RabbitProducer", () => {
 
   it("channels reset after reconnect — publishes succeed with fresh channel", async () => {
     const handler2 = new RabbitSingleConnectionHandler(amqpUrl, {
-      reconnectInterval: 300,
-      maxReconnectAttempts: 5,
+      circuitBreaker: { threshold: 5, resetTimeout: 300 },
     });
     await handler2.ConnectToService();
 

@@ -1,6 +1,10 @@
 import amqp from "amqplib";
 import { ChannelManager } from "../channel/manager.js";
 import { RabbitLogger } from "../logger/logger.js";
+import {
+  CircuitBreaker,
+  type CircuitBreakerOptions,
+} from "./circuit-breaker.js";
 import type { RabbitConnectionOptions } from "../types.js";
 
 export interface IRabbitConnection {
@@ -18,25 +22,33 @@ export class RabbitSingleConnectionHandler implements IRabbitConnection {
   private _channel: amqp.Channel | null = null;
   private _confirmChannel: amqp.ConfirmChannel | null = null;
   private rabbitConnString: string;
-  private options: Required<RabbitConnectionOptions>;
+  private connOptions: {
+    heartbeat: number;
+    frameMax: number;
+    channelMax: number;
+  };
   private reconnectAttempts = 0;
   private isShuttingDown = false;
   private onReconnectCallbacks: Array<() => Promise<void>> = [];
   private logger: RabbitLogger;
+  private breaker: CircuitBreaker;
 
   public get rabbitConnection(): amqp.ChannelModel | null {
     return this._rabbitConnection;
   }
 
-  public constructor(rabbitConnString: string, options: RabbitConnectionOptions = {}) {
+  public constructor(
+    rabbitConnString: string,
+    connOptions: RabbitConnectionOptions = {},
+    breakerOptions: Partial<CircuitBreakerOptions> = {},
+  ) {
     this.rabbitConnString = rabbitConnString;
-    this.options = {
-      heartbeat: options.heartbeat ?? 60,
-      reconnectInterval: options.reconnectInterval ?? 5000,
-      maxReconnectAttempts: options.maxReconnectAttempts ?? 10,
-      frameMax: options.frameMax ?? 0,
-      channelMax: options.channelMax ?? 0,
+    this.connOptions = {
+      heartbeat: connOptions.heartbeat ?? 60,
+      frameMax: connOptions.frameMax ?? 0,
+      channelMax: connOptions.channelMax ?? 0,
     };
+    this.breaker = new CircuitBreaker(breakerOptions);
     this.logger = new RabbitLogger();
   }
 
@@ -49,9 +61,12 @@ export class RabbitSingleConnectionHandler implements IRabbitConnection {
   }
 
   public async ConnectToService() {
-    const { reconnectInterval, maxReconnectAttempts, ...amqpOptions } = this.options;
+    const { ...amqpOptions } = this.connOptions;
     this.logger.info("Connecting to RabbitMQ", "SingleConnection");
-    this._rabbitConnection = await amqp.connect(this.rabbitConnString, amqpOptions);
+    this._rabbitConnection = await amqp.connect(
+      this.rabbitConnString,
+      amqpOptions,
+    );
     this.reconnectAttempts = 0;
     this.logger.info("Connected to RabbitMQ", "SingleConnection");
 
@@ -69,58 +84,80 @@ export class RabbitSingleConnectionHandler implements IRabbitConnection {
   }
 
   public async getChannel(): Promise<amqp.Channel> {
-    if (!this._rabbitConnection) throw new Error("[SingleConnection] No active connection");
+    if (!this._rabbitConnection)
+      throw new Error("[SingleConnection] No active connection");
     if (!this._channel) {
-      this._channel = await ChannelManager.createChannel(this._rabbitConnection, () => {
-        this.logger.warn("Channel closed", "SingleConnection");
-        this._channel = null;
-      });
+      this._channel = await ChannelManager.createChannel(
+        this._rabbitConnection,
+        () => {
+          this.logger.warn("Channel closed", "SingleConnection");
+          this._channel = null;
+        },
+      );
       this.logger.debug("Channel created", "SingleConnection");
     }
     return this._channel;
   }
 
   public async getConfirmChannel(): Promise<amqp.ConfirmChannel> {
-    if (!this._rabbitConnection) throw new Error("[SingleConnection] No active connection");
+    if (!this._rabbitConnection)
+      throw new Error("[SingleConnection] No active connection");
     if (!this._confirmChannel) {
-      this._confirmChannel = await ChannelManager.createConfirmChannel(this._rabbitConnection, () => {
-        this.logger.warn("Confirm channel closed", "SingleConnection");
-        this._confirmChannel = null;
-      });
+      this._confirmChannel = await ChannelManager.createConfirmChannel(
+        this._rabbitConnection,
+        () => {
+          this.logger.warn("Confirm channel closed", "SingleConnection");
+          this._confirmChannel = null;
+        },
+      );
       this.logger.debug("Confirm channel created", "SingleConnection");
     }
     return this._confirmChannel;
   }
 
   private async Reconnect() {
-    if (this.reconnectAttempts >= this.options.maxReconnectAttempts) {
-      this.logger.error("Max reconnect attempts reached, giving up", "SingleConnection", {
-        maxAttempts: this.options.maxReconnectAttempts,
-      });
-      process.exitCode = 1;
-      return;
-    }
-    this.reconnectAttempts++;
+    if (!this.breaker.canAttempt()) return;
+
+    const delay = this.breaker.getBackoffDelay(this.reconnectAttempts, 30000);
     this.logger.info("Attempting reconnect", "SingleConnection", {
-      attempt: this.reconnectAttempts,
-      maxAttempts: this.options.maxReconnectAttempts,
-      retryInMs: this.options.reconnectInterval,
+      attempt: this.reconnectAttempts + 1,
+      delayMs: delay,
+      circuitState: this.breaker.getState(),
     });
-    await new Promise((r) => setTimeout(r, this.options.reconnectInterval));
-    const currentAttempt = this.reconnectAttempts;
+
+    await new Promise((r) => setTimeout(r, delay));
+    this.reconnectAttempts++;
+
     try {
       await this.ConnectToService();
-      this.logger.info("Reconnected successfully", "SingleConnection", { attempt: currentAttempt });
+      this.breaker.recordSuccess();
+      this.logger.info("Reconnected successfully", "SingleConnection", {
+        attempt: this.reconnectAttempts,
+      });
       for (const cb of this.onReconnectCallbacks) await cb();
     } catch (err) {
-      this.logger.error("Reconnect attempt failed", "SingleConnection", { attempt: currentAttempt, err });
-      await this.Reconnect();
+      this.breaker.recordFailure();
+      this.logger.error("Reconnect attempt failed", "SingleConnection", {
+        attempt: this.reconnectAttempts,
+        circuitState: this.breaker.getState(),
+        err,
+      });
+      if (this.breaker.getState() === "OPEN") {
+        this.logger.warn(
+          "Circuit opened — pausing reconnect",
+          "SingleConnection",
+        );
+        this.breaker.scheduleProbe(() => this.Reconnect());
+      } else {
+        await this.Reconnect();
+      }
     }
   }
 
   public async gracefulShutdown() {
     this.logger.info("Initiating graceful shutdown", "SingleConnection");
     this.isShuttingDown = true;
+    this.breaker.reset();
     this._channel = null;
     this._confirmChannel = null;
     if (this._rabbitConnection) {
@@ -128,7 +165,10 @@ export class RabbitSingleConnectionHandler implements IRabbitConnection {
       this._rabbitConnection = null;
       this.logger.info("Connection closed gracefully", "SingleConnection");
     } else {
-      this.logger.warn("Graceful shutdown called but no active connection", "SingleConnection");
+      this.logger.warn(
+        "Graceful shutdown called but no active connection",
+        "SingleConnection",
+      );
     }
     this.isShuttingDown = false;
     this.reconnectAttempts = 0;

@@ -43,8 +43,7 @@ describe("RabbitSingleConnectionHandler", () => {
 
   it("nulls connection on drop and fires all onReconnect callbacks exactly once", async () => {
     const handler = new RabbitSingleConnectionHandler(amqpUrl, {
-      reconnectInterval: 300,
-      maxReconnectAttempts: 5,
+      circuitBreaker: { threshold: 5, resetTimeout: 300 },
     });
     await handler.ConnectToService();
 
@@ -77,8 +76,7 @@ describe("RabbitSingleConnectionHandler", () => {
 
   it("does not reconnect after graceful shutdown when connection closes", async () => {
     const handler = new RabbitSingleConnectionHandler(amqpUrl, {
-      reconnectInterval: 300,
-      maxReconnectAttempts: 5,
+      circuitBreaker: { threshold: 5, resetTimeout: 300 },
     });
     await handler.ConnectToService();
 
@@ -94,18 +92,25 @@ describe("RabbitSingleConnectionHandler", () => {
     expect(handler.rabbitConnection).toBeNull();
   });
 
-  it("sets exitCode=1 after exhausting max reconnect attempts", async () => {
-    const originalExitCode = process.exitCode;
+  it("circuit opens after threshold failures and stops attempting reconnect", async () => {
     const handler = new RabbitSingleConnectionHandler(amqpUrl, {
-      reconnectInterval: 100,
-      maxReconnectAttempts: 0,
+      // threshold=0 — circuit opens immediately on first failure before any attempt
+      // resetTimeout=60s — probe won't fire during this test
+      circuitBreaker: { threshold: 0, resetTimeout: 60000 },
     });
     await handler.ConnectToService();
-    await handler.rabbitConnection!.close();
-    await new Promise((r) => setTimeout(r, 300));
 
-    expect(process.exitCode).toBe(1);
-    process.exitCode = originalExitCode as number;
+    const cb = vi.fn().mockResolvedValue(undefined);
+    handler.onReconnect(cb);
+
+    await handler.rabbitConnection!.close();
+    await new Promise((r) => setTimeout(r, 500));
+
+    // circuit is OPEN — no reconnect happened
+    expect(handler.rabbitConnection).toBeNull();
+    expect(cb).not.toHaveBeenCalled();
+
+    await handler.gracefulShutdown();
   });
 });
 
@@ -140,17 +145,17 @@ describe("RabbitConnectionPoolHandler", () => {
 
   it("rabbitConnection returns null when all connections are dropped", async () => {
     const pool = new RabbitConnectionPoolHandler(amqpUrl, 2, {
-      maxReconnectAttempts: 0,
+      circuitBreaker: { threshold: 0, resetTimeout: 60000 },
     });
     await pool.ConnectToService();
 
     const conn1 = pool.rabbitConnection!;
     await conn1.close();
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 200));
 
     const conn2 = pool.rabbitConnection!;
     await conn2.close();
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 200));
 
     expect(pool.rabbitConnection).toBeNull();
 

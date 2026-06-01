@@ -139,8 +139,7 @@ describe("RabbitConnectionPoolHandler", () => {
 
   it("invalidates channel for dropped connection and recreates on reconnect", async () => {
     const pool = new RabbitConnectionPoolHandler(amqpUrl, 2, {
-      reconnectInterval: 300,
-      maxReconnectAttempts: 5,
+      circuitBreaker: { threshold: 5, resetTimeout: 300 },
     });
     await pool.ConnectToService();
 

@@ -198,8 +198,7 @@ describe("RabbitConsumer", () => {
 
   it("consumer re-establishes after connection drop and continues receiving", async () => {
     const handler2 = new RabbitSingleConnectionHandler(amqpUrl, {
-      reconnectInterval: 300,
-      maxReconnectAttempts: 5,
+      circuitBreaker: { threshold: 5, resetTimeout: 300 },
     });
     await handler2.ConnectToService();
 
@@ -230,7 +229,9 @@ describe("RabbitConsumer", () => {
   });
 
   it("throws when no active connection on consume", async () => {
-    const handler2 = new RabbitSingleConnectionHandler(amqpUrl, { maxReconnectAttempts: 0 });
+    const handler2 = new RabbitSingleConnectionHandler(amqpUrl, {
+      circuitBreaker: { threshold: 0, resetTimeout: 60000 },
+    });
     await handler2.ConnectToService();
     await handler2.gracefulShutdown();
 

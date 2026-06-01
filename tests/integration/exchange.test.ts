@@ -241,7 +241,9 @@ describe("DeadLetterExchange", () => {
   });
 
   it("throws when no active connection", async () => {
-    const handler2 = new RabbitSingleConnectionHandler(amqpUrl, { maxReconnectAttempts: 0 });
+    const handler2 = new RabbitSingleConnectionHandler(amqpUrl, {
+      circuitBreaker: { threshold: 0, resetTimeout: 60000 },
+    });
     await handler2.ConnectToService();
     await handler2.gracefulShutdown();
 
