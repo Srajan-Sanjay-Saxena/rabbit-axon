@@ -92,9 +92,11 @@ import { RabbitSingleConnectionHandler } from "rabbit-axon";
 
 const handler = new RabbitSingleConnectionHandler("amqp://user:pass@localhost:5672", {
   heartbeat: 30,
-  reconnectInterval: 3000,
-  maxReconnectAttempts: 15,
-  channelMax: 100,
+  circuitBreaker: {
+    threshold: 5,        // failures before opening circuit
+    resetTimeout: 30000, // ms to wait in OPEN before probing
+    maxResetTimeout: 300000, // cap on doubling — default 5 minutes
+  },
 });
 
 await handler.ConnectToService();
@@ -548,17 +550,20 @@ new RabbitConnectionPoolHandler(url, poolSize, options)
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `heartbeat` | `number` | `60` | Heartbeat interval in seconds. Detects dead connections. |
-| `reconnectInterval` | `number` | `5000` | Milliseconds to wait between reconnect attempts. |
-| `maxReconnectAttempts` | `number` | `10` | Max reconnect attempts before setting `process.exitCode = 1`. |
 | `frameMax` | `number` | `0` | Max frame size in bytes. `0` = no limit. |
 | `channelMax` | `number` | `0` | Max channels per connection. `0` = no limit. |
+| `circuitBreaker.threshold` | `number` | `5` | Consecutive failures before opening the circuit. |
+| `circuitBreaker.resetTimeout` | `number` | `30000` | Ms to wait in OPEN state before probing. Doubles on each failed probe. |
+| `circuitBreaker.maxResetTimeout` | `number` | `300000` | Cap on how much resetTimeout can double. |
 
 ```typescript
 const handler = new RabbitSingleConnectionHandler("amqp://localhost", {
   heartbeat: 30,
-  reconnectInterval: 3000,
-  maxReconnectAttempts: 15,
-  channelMax: 100,
+  circuitBreaker: {
+    threshold: 5,
+    resetTimeout: 30000,
+    maxResetTimeout: 300000,
+  },
 });
 ```
 
