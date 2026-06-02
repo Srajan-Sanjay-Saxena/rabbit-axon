@@ -1,131 +1,29 @@
-Copyright (c) 2025 Srajan Saxena. All rights reserved.
+MIT License
 
-RABBIT-AXON SOFTWARE LICENSE AGREEMENT
-=======================================
+Copyright (c) 2025 Srajan-Sanjay-Saxena. All rights reserved.
 
-This license governs the use of the rabbit-axon software package and all
-associated source code, documentation, and assets (collectively, the "Software"),
-authored and owned exclusively by Srajan Saxena ("the Author").
+All intellectual property rights, including but not limited to the source code,
+documentation, design, and architecture of this software, are exclusively owned
+by Srajan-Sanjay-Saxena.
 
-────────────────────────────────────────────────────────────────────────────────
-1. GRANT OF USE
-────────────────────────────────────────────────────────────────────────────────
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-Permission is hereby granted, free of charge, to any individual or organization
-("the User") to:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-  ✦ Install and use the Software as a dependency in personal, academic,
-    or commercial applications.
-
-  ✦ Reference, read, and study the source code for educational purposes.
-
-  ✦ Submit bug reports, suggestions, and contributions to the official
-    repository at github.com/Srajan-Sanjay-Saxena/rabbit-axon.
-
-────────────────────────────────────────────────────────────────────────────────
-2. RESTRICTIONS — THE FOLLOWING ARE STRICTLY PROHIBITED
-────────────────────────────────────────────────────────────────────────────────
-
-The User may NOT, under any circumstances:
-
-  ✦ Copy, reproduce, or incorporate the source code — in whole or in part —
-    into any other software library, package, SDK, framework, or product,
-    regardless of whether that product is open source or proprietary.
-
-  ✦ Publish, distribute, or release a modified or unmodified version of this
-    Software under a different name, brand, or identity on any package registry
-    (including but not limited to npm, yarn, pnpm, GitHub Packages, or any
-    private registry).
-
-  ✦ Sell, sublicense, rent, lease, or commercially exploit the Software itself
-    as a standalone product or as part of a product whose primary value is
-    derived from this Software.
-
-  ✦ Remove, alter, obscure, or misrepresent the authorship, copyright notice,
-    or any attribution to Srajan Saxena in any copy, fork, or derivative of
-    this Software.
-
-  ✦ Claim authorship or ownership of this Software or any substantial portion
-    of its source code.
-
-  ✦ Use the name "rabbit-axon", the Author's name "Srajan Saxena", or any
-    confusingly similar name to endorse or promote products derived from
-    this Software without prior written permission from the Author.
-
-────────────────────────────────────────────────────────────────────────────────
-3. ATTRIBUTION REQUIREMENT
-────────────────────────────────────────────────────────────────────────────────
-
-Any public-facing product, service, documentation, or publication that uses
-this Software must include clear and visible attribution in one of the
-following forms:
-
-  "Powered by rabbit-axon by Srajan Saxena (github.com/Srajan-Sanjay-Saxena/rabbit-axon)"
-
-  or
-
-  "Uses rabbit-axon — © 2025 Srajan Saxena"
-
-This attribution must not be hidden, obfuscated, or placed in a location
-that is not reasonably accessible to end users or readers.
-
-────────────────────────────────────────────────────────────────────────────────
-4. CONTRIBUTIONS
-────────────────────────────────────────────────────────────────────────────────
-
-By submitting a pull request, issue, or any contribution to this repository,
-the contributor agrees that:
-
-  ✦ The contribution becomes the intellectual property of Srajan Saxena.
-  ✦ The Author retains full rights to use, modify, and distribute the
-    contribution under this license or any future license.
-  ✦ The contributor waives any claim of ownership over the contributed code.
-
-────────────────────────────────────────────────────────────────────────────────
-5. FORKS AND MODIFICATIONS
-────────────────────────────────────────────────────────────────────────────────
-
-Forking this repository for the purpose of submitting contributions back to
-the original project is permitted.
-
-Forking for any other purpose — including creating a competing package,
-a renamed version, or a derivative library — is strictly prohibited without
-prior written permission from the Author.
-
-────────────────────────────────────────────────────────────────────────────────
-6. NO WARRANTY
-────────────────────────────────────────────────────────────────────────────────
+No contribution, pull request, or modification submitted to this project
+transfers any intellectual property rights to the contributor. All contributions
+become the sole property of the copyright holder upon submission.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
-
-IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING
-FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-
-────────────────────────────────────────────────────────────────────────────────
-7. TERMINATION
-────────────────────────────────────────────────────────────────────────────────
-
-Any violation of the terms of this license immediately and automatically
-terminates the User's rights to use, install, or reference this Software.
-
-The Author reserves the right to pursue legal action for any violation of
-this license, including but not limited to copyright infringement, trademark
-misuse, and unfair competition.
-
-────────────────────────────────────────────────────────────────────────────────
-8. GOVERNING LAW
-────────────────────────────────────────────────────────────────────────────────
-
-This license shall be governed by and construed in accordance with the laws
-of India, without regard to its conflict of law provisions.
-
-────────────────────────────────────────────────────────────────────────────────
-
-For permissions beyond the scope of this license, contact:
-  Srajan Saxena — github.com/Srajan-Sanjay-Saxena
-
-© 2025 Srajan Saxena. All rights reserved.
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

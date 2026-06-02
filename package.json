@@ -1,6 +1,6 @@
 {
   "name": "rabbit-axon",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Class-based TypeScript RabbitMQ wrapper with auto-reconnect, DLX, publisher confirms and exponential backoff",
   "type": "module",
   "main": "./dist/index.js",
@@ -39,7 +39,7 @@
     "axon"
   ],
   "author": "Srajan Saxena",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Srajan-Sanjay-Saxena/rabbit-axon.git"
