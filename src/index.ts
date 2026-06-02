@@ -9,6 +9,7 @@ export type {
   ExchangeTopics,
   ExchangeOptions,
   RabbitConnectionOptions,
+  CircuitBreakerOptions,
   QueueArguments,
   PublishOptions,
   ConsumeOptions,
