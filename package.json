@@ -1,6 +1,6 @@
 {
   "name": "rabbit-axon",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "Class-based TypeScript RabbitMQ wrapper with auto-reconnect, DLX, publisher confirms and exponential backoff",
   "type": "module",
   "main": "./dist/index.js",
